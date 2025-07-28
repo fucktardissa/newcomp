@@ -13,6 +13,7 @@ local function getErrorMessage(err)
         return tostring(err)
     end
 end
+--aa
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
 
@@ -282,52 +283,38 @@ ConfigTab:AddParagraph({ Title = "Manually save or load your settings." })
 ConfigTab:AddButton({
     Title = "Save Settings",
     Callback = function()
-        local settings = {}
-        for _, key in ipairs(ConfigToSave) do
-            if Window.Options and Window.Options[key] then
-                settings[key] = Window.Options[key].Value
-            end
-        end
-
-        local success, result = pcall(function()
-            SaveManager:Save(settings)
-        end)
-
+        -- SaveManager:Save expects a string name, not a table of values
+        local success, err = SaveManager:Save("default")
         if success then
             Fluent:Notify({ Title = "Success", Content = "Settings saved successfully" })
         else
-            Fluent:Notify({ 
-                Title = "Error", 
-                Content = "Failed to save settings: " .. getErrorMessage(result),
+            Fluent:Notify({
+                Title = "Error",
+                Content = "Failed to save settings: " .. tostring(err),
                 Duration = 8
             })
         end
     end
 })
+
 
 ConfigTab:AddButton({
     Title = "Load Settings",
     Callback = function()
-        local success, loaded = pcall(function()
-            return SaveManager:Load()
-        end)
-
-        if success and loaded then
-            refreshUI(loaded)
+        local success, err = SaveManager:Load("default")
+        if success then
+            -- refreshUI is already wired to set all Window.Options from the loaded data
             Fluent:Notify({ Title = "Success", Content = "Settings loaded successfully" })
         else
-            local errMsg = "Failed to load settings"
-            if not success then
-                errMsg = errMsg .. ": " .. getErrorMessage(loaded)
-            end
-            Fluent:Notify({ 
-                Title = "Error", 
-                Content = errMsg,
+            Fluent:Notify({
+                Title = "Error",
+                Content = "Failed to load settings: " .. tostring(err),
                 Duration = 8
             })
         end
     end
 })
+
 
 ConfigTab:AddButton({
     Title = "Reset Settings",
