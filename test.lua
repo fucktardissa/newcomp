@@ -1,4 +1,4 @@
---6ix7even
+--6ix7evenasdasdsa
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
 
@@ -21,7 +21,7 @@ if type(loadedConfig) == "table" then
     end
 end
 
-SaveManager:SetLibrary(Window)
+SaveManager:SetLibrary(Fluent)
 SaveManager:SetFolder("ShitassCompScriptConfigV3")
 local ConfigToSave = {}
 
@@ -82,7 +82,10 @@ local quests = {
 }
 
 local function tweenToPosition(position)
-    local speed = Window.Options.TweenSpeed.Value or 30
+    local speed = 30
+    if Window.Options and Window.Options.TweenSpeed then
+        speed = Window.Options.TweenSpeed.Value or 30
+    end
     local dist = (humanoidRootPart.Position - position).Magnitude
     local time = dist / speed
     local tweenInfo = TweenInfo.new(time, Enum.EasingStyle.Linear)
@@ -156,7 +159,7 @@ local function taskManager()
                                     end
                                 end
                                 
-                                local selectedOption = Window.Options["EggFor_"..questData.ID]
+                                local selectedOption = Window.Options and Window.Options["EggFor_"..questData.ID]
                                 local fallbackEgg = (selectedOption and selectedOption.Value) or questData.DefaultEgg
                                 local eggToHatch = matchedEgg or fallbackEgg
                                 
@@ -190,7 +193,7 @@ end
 
 local function refreshUI(options)
     for optionName, optionValue in pairs(options) do
-        if Window.Options[optionName] then
+        if Window.Options and Window.Options[optionName] then
             Window.Options[optionName]:SetValue(optionValue)
         end
     end
@@ -267,7 +270,7 @@ ConfigTab:AddButton({
     Callback = function()
         local settings = {}
         for _, key in ipairs(ConfigToSave) do
-            if Window.Options[key] then
+            if Window.Options and Window.Options[key] then
                 settings[key] = Window.Options[key].Value
             end
         end
@@ -339,13 +342,15 @@ ConfigTab:AddButton({
 SaveManager:BuildConfig(ConfigToSave)
 Window:SelectTab(1)
 
--- Corrected startup logic
-if autoTasksToggle.Value then
-    startStopAutomation(true)
-end
+-- Defer startup to avoid initialization issues
+task.defer(function()
+    if autoTasksToggle.Value then
+        startStopAutomation(true)
+    end
 
-Fluent:Notify({
-    Title = "Script Loaded",
-    Content = "Settings loaded successfully",
-    Duration = 8
-})
+    Fluent:Notify({
+        Title = "Script Loaded",
+        Content = "Settings loaded successfully",
+        Duration = 8
+    })
+end)
