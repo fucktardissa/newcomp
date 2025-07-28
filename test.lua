@@ -21,7 +21,7 @@ if type(loadedConfig) == "table" then
     end
 end
 
-SaveManager:SetLibrary(Fluent)
+SaveManager:SetLibrary(Window)
 SaveManager:SetFolder("ShitassCompScriptConfigV3")
 local ConfigToSave = {}
 
