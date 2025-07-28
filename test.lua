@@ -1,4 +1,4 @@
---2
+--3
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
 
@@ -20,6 +20,7 @@ local ConfigToSave = {}
 local MainTab = Window:AddTab({ Title = "Main", Icon = "home" })
 local QuestTab = Window:AddTab({ Title = "Quests", Icon = "edit" })
 local EggSettingsTab = Window:AddTab({ Title = "Egg Settings", Icon = "settings" })
+local ConfigTab = Window:AddTab({ Title = "Config", Icon = "folder" }) -- New tab for config management
 
 local tweenService = game:GetService("TweenService")
 local players = game:GetService("Players")
@@ -173,6 +174,15 @@ local function taskManager()
     end
 end
 
+-- Function to refresh the UI with the latest loaded settings
+local function refreshUI(options)
+    for optionName, optionValue in pairs(options) do
+        if Window.Options[optionName] then
+            Window.Options[optionName]:SetValue(optionValue)
+        end
+    end
+end
+
 local autoTasksToggle = MainTab:AddToggle("AutoTasks", {
     Title = "Enable Auto Complete",
     Default = LoadedOptions.AutoTasks or false,
@@ -231,6 +241,30 @@ for _, q in ipairs(quests) do
     })
     table.insert(ConfigToSave, optionId)
 end
+
+-- New buttons in the Config Tab
+ConfigTab:AddParagraph({ Title = "Manually save or load your settings." })
+
+ConfigTab:AddButton({
+    Title = "Save Settings",
+    Callback = function()
+        SaveManager:Save()
+        Fluent:Notify({ Title = "Success", Content = "Settings have been saved." })
+    end
+})
+
+ConfigTab:AddButton({
+    Title = "Load Settings",
+    Callback = function()
+        local loaded = SaveManager:Load()
+        if loaded then
+            refreshUI(loaded) -- Call the function to update the UI
+            Fluent:Notify({ Title = "Success", Content = "Settings have been loaded." })
+        else
+            Fluent:Notify({ Title = "Error", Content = "No settings file found." })
+        end
+    end
+})
 
 SaveManager:BuildConfig(ConfigToSave)
 Window:SelectTab(1)
