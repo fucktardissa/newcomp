@@ -1,4 +1,4 @@
---6
+--6.7
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
 
@@ -196,30 +196,7 @@ local function refreshUI(options)
     end
 end
 
--- test (1).lua: MODIFIED
-local autoTasksToggle = MainTab:AddToggle("AutoTasks", {
-    Title = "Enable Auto Complete",
-    Default = LoadedOptions.AutoTasks or false,
-    Callback = startStopAutomation
-        taskAutomationEnabled = v
-        getgenv().autoPressE = v
-        if v then
-            task.spawn(taskManager)
-            task.spawn(function()
-                while getgenv().autoPressE do
-                    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
-                    task.wait()
-                    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
-                    task.wait()
-                end
-            end)
-        end
-    end
-})
-table.insert(ConfigToSave, "AutoTasks")
-
-
--- test (1).lua: MODIFIED
+-- Function to handle starting/stopping automation logic
 local function startStopAutomation(v)
     taskAutomationEnabled = v
     getgenv().autoPressE = v
@@ -235,6 +212,14 @@ local function startStopAutomation(v)
         end)
     end
 end
+
+-- UI Elements with proper nil checks
+local autoTasksToggle = MainTab:AddToggle("AutoTasks", {
+    Title = "Enable Auto Complete",
+    Default = LoadedOptions.AutoTasks or false,
+    Callback = startStopAutomation
+})
+table.insert(ConfigToSave, "AutoTasks")
 
 MainTab:AddDropdown("FallbackEgg", {
     Title = "Fallback Egg",
@@ -323,7 +308,6 @@ ConfigTab:AddButton({
     end
 })
 
--- test (1).lua: MODIFIED
 ConfigTab:AddButton({
     Title = "Reset Settings",
     Callback = function()
@@ -351,9 +335,11 @@ ConfigTab:AddButton({
         })
     end
 })
+
 SaveManager:BuildConfig(ConfigToSave)
 Window:SelectTab(1)
 
+-- Corrected startup logic
 if autoTasksToggle.Value then
     startStopAutomation(true)
 end
