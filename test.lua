@@ -1,3 +1,4 @@
+--1
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
 
@@ -12,8 +13,7 @@ local Window = Fluent:CreateWindow({
 })
 
 SaveManager:SetLibrary(Fluent)
-SaveManager:SetInitialSave("ShitassCompScriptConfigV3")
-local LoadedOptions = SaveManager:Load() or {}
+local LoadedOptions = SaveManager:Load("ShitassCompScriptConfigV3") or {}
 local ConfigToSave = {}
 
 local MainTab = Window:AddTab({ Title = "Main", Icon = "home" })
