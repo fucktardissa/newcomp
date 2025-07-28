@@ -1,18 +1,18 @@
---a,fdas
 local function getErrorMessage(err)
     if type(err) == "string" then
         return err
     elseif type(err) == "table" then
         local parts = {}
         for k, v in pairs(err) do
-            table.insert(parts, tostring(k) .. ": " .. tostring(v))
+            -- Recursively convert nested tables to strings
+            local valueStr = type(v) == "table" and getErrorMessage(v) or tostring(v)
+            table.insert(parts, tostring(k) .. ": " .. valueStr)
         end
         return "{" .. table.concat(parts, ", ") .. "}"
     else
         return tostring(err)
     end
 end
-
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
 
