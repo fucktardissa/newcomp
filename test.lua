@@ -1,4 +1,18 @@
---6ix7evenasdasdsa
+--taliho
+local function getErrorMessage(err)
+    if type(err) == "string" then
+        return err
+    elseif type(err) == "table" then
+        local parts = {}
+        for k, v in pairs(err) do
+            table.insert(parts, tostring(k) .. ": " .. tostring(v))
+        end
+        return "{" .. table.concat(parts, ", ") .. "}"
+    else
+        return tostring(err)
+    end
+end
+
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
 
@@ -284,7 +298,7 @@ ConfigTab:AddButton({
         else
             Fluent:Notify({ 
                 Title = "Error", 
-                Content = "Failed to save settings: " .. tostring(result),
+                Content = "Failed to save settings: " .. getErrorMessage(result),
                 Duration = 8
             })
         end
@@ -302,9 +316,13 @@ ConfigTab:AddButton({
             refreshUI(loaded)
             Fluent:Notify({ Title = "Success", Content = "Settings loaded successfully" })
         else
+            local errMsg = "Failed to load settings"
+            if not success then
+                errMsg = errMsg .. ": " .. getErrorMessage(loaded)
+            end
             Fluent:Notify({ 
                 Title = "Error", 
-                Content = "Failed to load settings" .. (not success and ": " .. tostring(loaded) or ""),
+                Content = errMsg,
                 Duration = 8
             })
         end
