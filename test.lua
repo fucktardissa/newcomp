@@ -1,4 +1,4 @@
---taliho
+--a,fdas
 local function getErrorMessage(err)
     if type(err) == "string" then
         return err
@@ -357,7 +357,7 @@ ConfigTab:AddButton({
     end
 })
 
-SaveManager:BuildConfig(ConfigToSave)
+-- FIXED: Removed the problematic SaveManager:BuildConfig call
 Window:SelectTab(1)
 
 -- Defer startup to avoid initialization issues
