@@ -1,4 +1,4 @@
---5
+--6
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
 
@@ -196,11 +196,11 @@ local function refreshUI(options)
     end
 end
 
--- UI Elements with proper nil checks
+-- test (1).lua: MODIFIED
 local autoTasksToggle = MainTab:AddToggle("AutoTasks", {
     Title = "Enable Auto Complete",
     Default = LoadedOptions.AutoTasks or false,
-    Callback = function(v)
+    Callback = startStopAutomation
         taskAutomationEnabled = v
         getgenv().autoPressE = v
         if v then
@@ -217,6 +217,24 @@ local autoTasksToggle = MainTab:AddToggle("AutoTasks", {
     end
 })
 table.insert(ConfigToSave, "AutoTasks")
+
+
+-- test (1).lua: MODIFIED
+local function startStopAutomation(v)
+    taskAutomationEnabled = v
+    getgenv().autoPressE = v
+    if v then
+        task.spawn(taskManager)
+        task.spawn(function()
+            while getgenv().autoPressE do
+                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+                task.wait()
+                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+                task.wait()
+            end
+        end)
+    end
+end
 
 MainTab:AddDropdown("FallbackEgg", {
     Title = "Fallback Egg",
@@ -305,11 +323,27 @@ ConfigTab:AddButton({
     end
 })
 
+-- test (1).lua: MODIFIED
 ConfigTab:AddButton({
     Title = "Reset Settings",
     Callback = function()
-        LoadedOptions = {}
-        refreshUI({})
+        -- Define the default values for all settings
+        local defaultSettings = {
+            AutoTasks = false,
+            FallbackEgg = "Infinity Egg",
+            TweenSpeed = 30
+        }
+        for _, q in ipairs(quests) do
+            defaultSettings["Quest_" .. q.ID] = false
+            defaultSettings["EggFor_" .. q.ID] = q.DefaultEgg
+        end
+
+        -- Apply the defaults using the existing refreshUI function
+        refreshUI(defaultSettings)
+        
+        -- Clear the saved configuration file
+        pcall(function() SaveManager:Save({}) end)
+
         Fluent:Notify({
             Title = "Success",
             Content = "All settings reset to defaults",
@@ -317,12 +351,11 @@ ConfigTab:AddButton({
         })
     end
 })
-
 SaveManager:BuildConfig(ConfigToSave)
 Window:SelectTab(1)
 
 if autoTasksToggle.Value then
-    autoTasksToggle:SetValue(true)
+    startStopAutomation(true)
 end
 
 Fluent:Notify({
