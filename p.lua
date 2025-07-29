@@ -10,10 +10,11 @@ local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/
 local window = Fluent:CreateWindow({
     Title = "Enchant Reroller",
     SubTitle = "by FluentUI",
-    Size = UDim2.fromOffset(450, 600),
+    Size = UDim2.new(0, 450, 0, 600), -- Use UDim2.new, not fromOffset
     Theme = "Dark",
     Acrylic = true
 })
+
 
 local tab = window:AddTab({Title = "Main", Icon = "settings"})
 local opts = Fluent.Options
