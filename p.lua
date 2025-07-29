@@ -1,7 +1,6 @@
-local Fluent = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/main/source.lua"))()
-
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 local Window = Fluent:CreateWindow({
-    Title = "🔁 Enchant Reroller",
+    Title = "🔁 Enchant Rerollerr",
     SubTitle = "Select Pets",
     TabWidth = 120,
     Size = UDim2.fromOffset(460, 540),
@@ -40,8 +39,8 @@ function updatePetList(filterText)
     local results = {}
 
     for _, pet in pairs(data.Pets or {}) do
-        local name = pet.Name or pet.name or pet._name or "Unknown"
-        local id = tostring(pet.Id)
+        local name = tostring(pet.Name or pet.name or pet._name or "Unknown")
+        local id = tostring(pet.Id or pet.id or pet._id or "???")
         if filterText == "" or string.find(name:lower(), filterText:lower()) then
             table.insert(results, name .. " [" .. id .. "]")
         end
