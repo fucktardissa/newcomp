@@ -1,84 +1,54 @@
-local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local Fluent = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/main/source.lua"))()
+
 local Window = Fluent:CreateWindow({
-    Title = "Enchant Reroller",
-    SubTitle = "by 2",
-    TabWidth = 160,
-    Size = UDim2.fromOffset(500, 400),
+    Title = "🔁 Enchant Reroller",
+    SubTitle = "Select Pets",
+    TabWidth = 120,
+    Size = UDim2.fromOffset(460, 540),
     Acrylic = true,
     Theme = "Dark",
-    MinimizeKey = Enum.KeyCode.LeftControl
+    MinimizeKey = Enum.KeyCode.RightControl
 })
 
-local Tabs = {
-    Main = Window:AddTab({ Title = "Main", Icon = "wand-sparkles" }),
-}
+local tab = Window:AddTab({ Title = "Main" })
 
-local Options = Fluent.Options
+-- Search box + dropdown frame
+local selectedPetIds = {}
+local petButtons = {}
 
--- Pull pets from LocalData
-local success, PetList = pcall(function()
-    return require(game:GetService("ReplicatedStorage"):WaitForChild("LocalData")).Save.Pets
+local section = tab:AddSection("Select Pets")
+
+local dropdownFrame = section:AddDropdown("Select Pets", {
+    Values = {},
+    Multi = true,
+    Default = {},
+    Callback = function(selected)
+        selectedPetIds = {}
+        for _, id in pairs(selected) do
+            selectedPetIds[id] = true
+        end
+    end
+})
+
+local searchBox = section:AddTextbox("Search Name", "", function(value)
+    updatePetList(value)
 end)
 
--- Create pet dropdown values
-local petDisplayNames = {}
-local uuidToDisplayMap = {}
-local displayToUuidMap = {}
+function updatePetList(filterText)
+    local LocalData = require(game:GetService("ReplicatedStorage").Client.Framework.Services.LocalData)
+    local data = LocalData:Get()
+    local results = {}
 
-if success and typeof(PetList) == "table" then
-    for uuid, pet in pairs(PetList) do
-        local displayName = pet.nk or ("Unknown [" .. uuid:sub(1, 8) .. "]")
-        local fullName = displayName .. " (" .. uuid:sub(1, 8) .. ")"
-        table.insert(petDisplayNames, fullName)
-        uuidToDisplayMap[uuid] = fullName
-        displayToUuidMap[fullName] = uuid
+    for _, pet in pairs(data.Pets or {}) do
+        local name = pet.Name or pet.name or pet._name or "Unknown"
+        local id = tostring(pet.Id)
+        if filterText == "" or string.find(name:lower(), filterText:lower()) then
+            table.insert(results, name .. " [" .. id .. "]")
+        end
     end
-else
-    table.insert(petDisplayNames, "No pets found")
+
+    dropdownFrame:Clear()
+    dropdownFrame:Add(results)
 end
 
--- Dropdowns
-local CurrencyDropdown = Tabs.Main:AddDropdown("CurrencyType", {
-    Title = "Currency",
-    Values = {"Gems", "Diamonds", "Tokens"},
-    Multi = false,
-    Default = "Gems"
-})
-
-local PetDropdown = Tabs.Main:AddDropdown("SelectedPet", {
-    Title = "Pet",
-    Values = petDisplayNames,
-    Multi = false,
-    Default = #petDisplayNames > 0 and petDisplayNames[1] or nil
-})
-
--- Reroll button
-Tabs.Main:AddButton({
-    Title = "Reroll Enchants",
-    Description = "Click to reroll selected pet using selected currency.",
-    Callback = function()
-        local selectedPetDisplay = Options.SelectedPet.Value
-        local currency = Options.CurrencyType.Value
-        local uuid = displayToUuidMap[selectedPetDisplay]
-
-        if not uuid then
-            Fluent:Notify({
-                Title = "Error",
-                Content = "Invalid pet selection!",
-                Duration = 3
-            })
-            return
-        end
-
-        print("Sending reroll request for pet UUID:", uuid, "with", currency)
-        -- Insert RemoteFunction call here
-    end
-})
-
-Window:SelectTab(1)
-
-Fluent:Notify({
-    Title = "Enchant Reroller",
-    Content = "UI loaded!",
-    Duration = 5
-})
+updatePetList("")
