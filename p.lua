@@ -1,28 +1,20 @@
---[[
-    Script: Enchant Rerollerr
-    Author: Gemini
-    Description: Automatically rerolls pet enchants until a desired enchant is obtained.
-    Uses the Fluent UI library by dawid-scripts.
-]]
-
--- Load Fluent library
-local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
-
--- Roblox Services
+--// Services
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 
--- Game-specific Modules & Remotes
+--// Fluent UI Library (adjust the path if necessary)
+local Fluent = loadstring(game:HttpGet("https://github.com/1-Development/Fluent/releases/latest/download/Fluent.lua"))()
+--// Note: The above line fetches the latest version of Fluent. 
+--// For production, it's better to save Fluent as a ModuleScript in your game.
+--// local Fluent = require(ReplicatedStorage.Fluent)
+
+--// Original Game Services & Variables
 local LocalPlayer = Players.LocalPlayer
 local LocalData = require(ReplicatedStorage.Client.Framework.Services.LocalData)
 local RemoteFunction = ReplicatedStorage.Shared.Framework.Network.Remote.RemoteFunction
 
---============================================================================--
---                               CONFIGURATION                              --
---============================================================================--
-
--- A list of all available enchants in the game
-local ALL_ENCHANTS = {
+--// Configuration
+local Enchants = {
     "Looter I", "Looter II", "Looter III", "Looter IV", "Looter V",
     "Bubbler I", "Bubbler II", "Bubbler III", "Bubbler IV", "Bubbler V",
     "Gleaming I", "Gleaming II", "Gleaming III",
@@ -31,200 +23,222 @@ local ALL_ENCHANTS = {
     "Determination", "Shiny Seeker"
 }
 
---============================================================================--
---                           SCRIPT STATE & VARIABLES                           --
---============================================================================--
+local options = {
+    SelectedEnchant = Enchants[1],
+    RerollToggle = false
+}
 
+local selectedPetIds = {}
+local petCheckboxes = {}
 local rerolling = false
-local selectedPetIds = {}   -- Stores { [petId] = true/false }
-local selectedEnchants = {} -- Stores { [enchantName] = true/false }
-local petToggles = {}       -- Stores { [petId] = toggleObject }
 
 --============================================================================--
---                             UI SETUP (FLUENT)                              --
+--//                                 LOGIC                                  --//
 --============================================================================--
 
--- Create the main window
-local window = Fluent:CreateWindow({
-    Title = "🔁 Enchant Reroller",
-    SubTitle = "by Gemini",
-    TabWidth = 160, -- FIXED: Added missing parameter
-    Size = UDim2.fromOffset(480, 500),
-    Theme = "Dark",
-    Accent = Color3.fromRGB(100, 255, 150)
-})
+--// Helper function to parse enchant string (e.g., "Looter III") into name and level
+local function parseEnchant(enchantString)
+    local romanMap = { I = 1, II = 2, III = 3, IV = 4, V = 5 }
+    local name, roman = enchantString:match("^(.*) (%S+)$")
 
--- Add a tab for the main controls
-local mainTab = window:AddTab({ Title = "Settings", Icon = "rbxassetid://10672231295" })
-
--- Status Label
-local statusLabel = mainTab:AddLabel({
-    Text = "Status: Waiting...",
-    Description = "Current status of the reroller."
-})
-
---============================================================================--
---                                 CORE LOGIC                                 --
---============================================================================--
-
--- Helper function to find a pet object by its ID from player data
-local function findPetById(petId)
-    local playerData = LocalData:Get()
-    for _, pet in ipairs(playerData.Pets or {}) do
-        if pet.Id == petId then
-            return pet
-        end
+    if name and romanMap[roman] then
+        return name:lower(), romanMap[roman]
+    else
+        --// Handles enchants without a level, like "High Roller"
+        return enchantString:lower(), 1 --// Default level to 1 if not specified
     end
-    return nil
 end
 
--- Checks if a pet has any of the user-selected enchants
-local function hasDesiredEnchant(pet)
+--// Checks if a pet has the desired enchant
+local function hasDesiredEnchant(pet, id, lvl)
     if not pet or not pet.Enchants then return false end
-    
     for _, enchant in ipairs(pet.Enchants) do
-        -- Check if the enchant's ID (name) is in our selected list
-        if selectedEnchants[enchant.Id] then
+        if enchant.Id == id and enchant.Level == lvl then
             return true
         end
     end
     return false
 end
 
--- The main rerolling loop
+--// The main rerolling coroutine
+local rerollCoroutine
 local function startRerollLoop()
-    task.spawn(function()
+    rerolling = true
+    rerollCoroutine = coroutine.create(function()
+        local StatusLabel = Fluent.StatusLabel -- Reference the status label
+        
         while rerolling do
-            local petsToReroll = {}
+            local targetEnchantName, targetEnchantLevel = parseEnchant(options.SelectedEnchant)
             
-            -- Build a list of selected pets that don't have a desired enchant
-            for petId, isSelected in pairs(selectedPetIds) do
-                if isSelected then
-                    local pet = findPetById(petId)
-                    if pet and not hasDesiredEnchant(pet) then
-                        table.insert(petsToReroll, pet)
+            if not next(selectedPetIds) then
+                StatusLabel:Set("⚠️ Select at least one pet.")
+                task.wait(2)
+                goto continueLoop
+            end
+            
+            local playerData = LocalData:Get()
+            if not playerData or not playerData.Pets then
+                StatusLabel:Set("⏳ Waiting for player data...")
+                task.wait(1)
+                goto continueLoop
+            end
+            
+            local petsToReroll = {}
+            --// Find all selected pets that DON'T have the enchant
+            for petId, _ in pairs(selectedPetIds) do
+                local currentPet
+                for _, p in ipairs(playerData.Pets) do
+                    if p.Id == petId then
+                        currentPet = p
+                        break
                     end
                 end
-            end
-            
-            -- Reroll pets from the list
-            if #petsToReroll > 0 then
-                for _, pet in ipairs(petsToReroll) do
-                    if not rerolling then break end -- Exit loop immediately if stopped
-                    
-                    statusLabel:Set("Status: 🔁 Rerolling " .. (pet.Name or pet.Id))
-                    -- IMPORTANT: Assumes the remote function takes Pet ID and Currency Type
-                    RemoteFunction:InvokeServer("RerollEnchants", pet.Id, "Gems") 
-                    task.wait(0.3) -- Delay between reroll requests to prevent spam
+                
+                if currentPet and not hasDesiredEnchant(currentPet, targetEnchantName, targetEnchantLevel) then
+                    table.insert(petsToReroll, currentPet)
                 end
-            else
-                statusLabel:Set("Status: ✅ All selected pets have a desired enchant. Monitoring...")
             end
             
-            task.wait(2.0) -- Wait before next check cycle
+            if #petsToReroll == 0 then
+                StatusLabel:Set("✅ All selected pets have the desired enchant.")
+                task.wait(2) -- Check again after 2 seconds
+            else
+                for _, pet in ipairs(petsToReroll) do
+                    if not rerolling then break end -- Stop if toggle is flipped
+                    
+                    StatusLabel:Set("🔁 Rerolling " .. (pet.Name or pet.Id))
+                    RemoteFunction:InvokeServer("RerollEnchants", pet.Id, "Gems")
+                    task.wait(0.3) -- Delay between rerolls
+                end
+            end
+            
+            ::continueLoop::
+            task.wait(0.1) -- Brief pause at the end of each main loop
         end
-        statusLabel:Set("Status: ⏹️ Reroller stopped.")
     end)
+    coroutine.resume(rerollCoroutine)
 end
 
+local function stopRerollLoop()
+    rerolling = false
+    if rerollCoroutine and coroutine.status(rerollCoroutine) ~= "dead" then
+        --// No direct way to kill, but setting `rerolling` to false will stop the loop
+        rerollCoroutine = nil
+    end
+    Fluent.StatusLabel:Set("⏹️ Reroll stopped. Toggle on to start.")
+end
+
+
 --============================================================================--
---                         UI SECTIONS & INTERACTIONS                         --
+--//                                  GUI                                   --//
 --============================================================================--
 
---- Controls Section ---
-local controlsSection = mainTab:AddSection("Controls")
+local Window = Fluent:CreateWindow({
+    Title = "🔁 Enchant Reroller",
+    SubTitle = "by your_name_here",
+    Size = UDim2.fromOffset(450, 400),
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.RightControl
+})
 
-controlsSection:AddToggle("enableReroller", {
-    Title = "Enable Rerolling",
-    Description = "Start or stop the automatic rerolling process.",
-    Default = false
-}):OnChanged(function(value)
-    rerolling = value
-    if rerolling then
-        if not next(selectedPetIds) then
-            statusLabel:Set("Status: ⚠️ Please select at least one pet.")
-            rerolling = false -- Prevent starting
-            -- We need to find the toggle object to reset it. Fluent doesn't make this easy.
-            -- A simple warning is sufficient for now.
-            return
+local MainTab = Window:AddTab({ Title = "Reroller", Icon = "rbxassetid://10609232348" })
+
+---
+## Controls Section
+---
+
+local ControlsSection = MainTab:AddSection("Controls")
+
+ControlsSection:AddDropdown("EnchantDropdown", {
+    Title = "Target Enchant",
+    Values = Enchants,
+    Default = options.SelectedEnchant,
+    Callback = function(value)
+        options.SelectedEnchant = value
+    end
+})
+
+ControlsSection:AddToggle("RerollToggle", {
+    Title = "Start / Stop Rerolling",
+    Default = options.RerollToggle,
+    Callback = function(value)
+        options.RerollToggle = value
+        if value then
+            startRerollLoop()
+        else
+            stopRerollLoop()
         end
-        if not next(selectedEnchants) then
-            statusLabel:Set("Status: ⚠️ Please select at least one desired enchant.")
-            rerolling = false -- Prevent starting
-            return
+    end
+})
+
+--// We assign the label to the Fluent object to access it later for updates
+Fluent.StatusLabel = ControlsSection:AddLabel("Status", {
+    Text = "⏹️ Reroll stopped. Toggle on to start."
+})
+
+---
+## Pet Selection Section
+---
+
+local PetSection = MainTab:AddSection("Pet Selection")
+local PetCheckboxesContainer = PetSection:AddScrollbox("PetList", {
+    Size = UDim2.new(1, 0, 0, 150),
+    CanvasSize = UDim2.new(0,0,0,0) -- Will be auto-sized
+})
+
+--// Function to populate/update the pet list with checkboxes
+local function updatePetList(filterText)
+    filterText = filterText:lower()
+    
+    --// Clear previous checkboxes
+    for _, checkbox in pairs(petCheckboxes) do
+        checkbox:Destroy()
+    end
+    table.clear(petCheckboxes)
+
+    local data = LocalData:Get()
+    if not data or not data.Pets then return end
+
+    for _, pet in ipairs(data.Pets) do
+        local petName = pet.Name or pet.name or pet._name or "Unknown"
+        local petId = pet.Id
+        
+        --// Filter by search text
+        if filterText == "" or petName:lower():find(filterText, 1, true) then
+            local checkbox = PetCheckboxesContainer:AddCheckbox(petId, {
+                Title = petName,
+                Default = selectedPetIds[petId] or false, -- Keep checked state on refresh
+                Callback = function(value)
+                    selectedPetIds[petId] = value and true or nil
+                end
+            })
+            petCheckboxes[petId] = checkbox
         end
-        statusLabel:Set("Status: ⏳ Starting reroller...")
-        startRerollLoop()
-    else
-        statusLabel:Set("Status: ⏹️ Stopping...")
+    end
+end
+
+PetSection:AddSearchbar("PetSearch", {
+    Title = "Search Pets...",
+    Default = "",
+    Callback = function(text)
+        updatePetList(text)
+    end
+})
+
+--// Initial population & setup periodic refresh
+updatePetList("") 
+task.spawn(function()
+    while task.wait(5) do -- Refresh pet list every 5 seconds
+        if Window.Visible then
+            local searchbar = PetSection.elements.PetSearch
+            updatePetList(searchbar.Value)
+        end
     end
 end)
 
---- Pet Selection Section ---
-local petSection = mainTab:AddSection("Pet Selection")
-local petContainer = petSection:AddScroll({
-    Size = UDim2.fromOffset(0, 150), -- Height of 150px
-})
-
-local function updatePetToggles(filterText)
-    filterText = filterText:lower()
-    local playerData = LocalData:Get()
-    local existingPets = {}
-
-    -- Add/update toggles for pets in inventory
-    for _, petData in ipairs(playerData.Pets or {}) do
-        local petId = petData.Id
-        local petName = petData.Name or petData._name or "Unknown Pet"
-        existingPets[petId] = true
-
-        if not petToggles[petId] then
-            local toggle = petContainer:AddToggle(petId, { Title = petName })
-            toggle:OnChanged(function(value)
-                selectedPetIds[petId] = value
-            end)
-            petToggles[petId] = toggle
-        end
-
-        -- Update visibility based on search filter
-        petToggles[petId].Visible = filterText == "" or petName:lower():find(filterText, 1, true)
-    end
-    
-    -- Remove toggles for pets that no longer exist
-    for petId, toggle in pairs(petToggles) do
-        if not existingPets[petId] then
-            toggle:Destroy()
-            petToggles[petId] = nil
-            selectedPetIds[petId] = nil
-        end
-    end
-end
-
-petSection:AddSearch("petSearch", {
-    Title = "Search Pets",
-    Default = "",
-    Placeholder = "Enter pet name...",
-    OnChanged = updatePetToggles
-})
-
---- Enchant Selection Section ---
-local enchantSection = mainTab:AddSection("Desired Enchants")
-local enchantContainer = enchantSection:AddScroll({
-    Size = UDim2.fromOffset(0, 150),
-})
-
-for _, enchantName in ipairs(ALL_ENCHANTS) do
-    enchantContainer:AddToggle(enchantName, { Title = enchantName }):OnChanged(function(value)
-        selectedEnchants[enchantName] = value or nil -- Add to table if true, remove if false
-    end)
-end
-
--- Initial population of the pet list
-task.wait(2) -- Wait for game data to load
-updatePetToggles("")
-
--- Announce script loaded and UI ready
+--// Finalize the UI
 Fluent:Notify({
     Title = "Enchant Reroller",
-    Content = "UI loaded successfully. Configure your pets and enchants.",
+    Content = "UI Loaded! Press Right CTRL to toggle.",
     Duration = 5
 })
