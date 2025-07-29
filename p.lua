@@ -5,7 +5,7 @@ local RemoteFunction = ReplicatedStorage.Shared.Framework.Network.Remote.RemoteF
 local LocalPlayer = Players.LocalPlayer
 
 -- Load Fluent
-local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local Fluent = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/main/main.lua"))()
 
 local window = Fluent:CreateWindow({
     Title = "Enchant Reroller",
