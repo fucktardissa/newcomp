@@ -1,42 +1,50 @@
--- =================================================================================
---// DEBUG VERSION 1.0
--- =================================================================================
-print("DEBUG: Script starting...")
+--[[
+    Title: Enchant Reroller (Fluent Edition)
+    Description: A full-featured pet enchant reroller built with the Fluent UI library.
+]]
 
+--// =================================================================================
 --// Part 1: Setup & Services
-print("DEBUG: Part 1 - Loading services and game modules...")
+--// =================================================================================
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local LocalData = require(ReplicatedStorage.Client.Framework.Services.LocalData)
 local RemoteFunction = ReplicatedStorage.Shared.Framework.Network.Remote.RemoteFunction
-print("DEBUG: Part 1 - Complete.")
 
--- State Variables
 local rerolling = false
 
+--// =================================================================================
 --// Part 2: Fluent UI Initialization
-print("DEBUG: Part 2 - Initializing Fluent UI...")
+--// =================================================================================
+
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 local Window = Fluent:CreateWindow({
-    Title = "🔁 Enchant Reroller (Debug)",
-    SubTitle = "v2.0",
+    Title = "🔁 Enchant Reroller",
+    SubTitle = "v2.1",
     TabWidth = 160,
     Size = UDim2.fromOffset(460, 550),
     Acrylic = true,
     Theme = "Dark",
     MinimizeKey = Enum.KeyCode.RightControl
 })
+
 local MainTab = Window:AddTab({ Title = "Reroller", Icon = "rbxassetid://10222013164" })
 local PetSection = MainTab:AddSection("Pet Selection")
 local SettingsSection = MainTab:AddSection("Settings & Control")
-print("DEBUG: Part 2 - Complete.")
 
+--// =================================================================================
 --// Part 3: UI Element Definitions
-print("DEBUG: Part 3 - Defining UI elements...")
+--// =================================================================================
+
+-- Pet Selection UI
 local petDataMap = {} 
 local PetDropdown = PetSection:AddDropdown("PetDropdown", {
-    Title = "Select Pets", Values = {}, MultiSelect = true, Text = "Click Refresh Pet List below...",
+    Title = "Select Pets",
+    Values = {},
+    MultiSelect = true,
+    Text = "Click Refresh Pet List below...",
 })
 PetSection:AddButton({
     Title = "🔄 Refresh Pet List",
@@ -44,8 +52,8 @@ PetSection:AddButton({
         updatePetList()
     end,
 })
-print("DEBUG: Created Pet UI.")
 
+-- Settings & Control UI
 local availableEnchants = {
     "Secret Hunter", "Determination", "Ultra Roller", "Shiny Seeker", "Magnetism", 
     "Infinity", "High Roller", "Team Up I", "Team up II", "Team up III", 
@@ -54,23 +62,25 @@ local availableEnchants = {
     "Bubbler II", "Bubbler III", "Bubbler IV", "Bubbler V"
 }
 local EnchantDropdown = SettingsSection:AddDropdown("EnchantDropdown", {
-    Title = "Desired Enchant(s)", Values = availableEnchants, MultiSelect = true, Text = "Click to select enchants...",
+    Title = "Desired Enchant(s)",
+    Values = availableEnchants,
+    MultiSelect = true,
+    Text = "Click to select enchants...",
 })
-print("DEBUG: Created Enchant Dropdown.")
 
-SettingsSection:AddTextbox("EnchantLevel", {
-    Title = "Enchant Level", PlaceholderText = "e.g., 9", Default = "",
+-- CORRECTED LINE: AddTextBox with a capital 'B'
+SettingsSection:AddTextBox("EnchantLevel", {
+    Title = "Enchant Level",
+    PlaceholderText = "e.g., 9",
+    Default = "",
 })
-print("DEBUG: Created Level Textbox.")
 
 local StatusLabel = SettingsSection:AddLabel({ Text = "Status: Waiting..." })
-print("DEBUG: Created Status Label.")
+local EnchantToggle 
 
-local EnchantToggle -- Forward-declare
-print("DEBUG: Part 3 - Complete.")
-
+--// =================================================================================
 --// Part 4: Core Logic & Functions
-print("DEBUG: Part 4 - Defining functions...")
+--// =================================================================================
 
 local function hasDesiredEnchant(pet, targetEnchants, enchantLevel)
     for _, desiredId in pairs(targetEnchants) do
@@ -84,49 +94,96 @@ local function hasDesiredEnchant(pet, targetEnchants, enchantLevel)
 end
 
 function updatePetList()
-    print("DEBUG: updatePetList() called.")
     local petsForDropdown = {}
     petDataMap = {}
-    
-    print("DEBUG: Calling LocalData:Get()...")
     local data = LocalData:Get()
-    print("DEBUG: LocalData:Get() returned:", data) -- This will tell us if 'data' is nil
+    if not (data and data.Pets) then return end
 
-    if data and data.Pets then
-        print("DEBUG: 'data.Pets' found. Iterating through pets...")
-        for _, pet in pairs(data.Pets) do
-            local displayName = string.format("%s [%s]", (pet.Name or "Unknown"), tostring(pet.Id):sub(1, 5))
-            table.insert(petsForDropdown, displayName)
-            petDataMap[displayName] = pet.Id
-        end
-        print("DEBUG: Finished iterating. Found", #petsForDropdown, "pets.")
-    else
-        print("DEBUG: 'data' was nil or 'data.Pets' was not found!")
+    for _, pet in pairs(data.Pets) do
+        local displayName = string.format("%s [%s]", (pet.Name or "Unknown"), tostring(pet.Id):sub(1, 5))
+        table.insert(petsForDropdown, displayName)
+        petDataMap[displayName] = pet.Id
     end
     
     PetDropdown:SetValues(petsForDropdown)
     if #petsForDropdown > 0 then
         Fluent:Notify({ Title = "Success", Content = "Found " .. #petsForDropdown .. " pets.", Duration = 4 })
-    else
-        Fluent:Notify({ Title = "Debug Info", Content = "Pet list is empty. Check console for details.", Duration = 8 })
     end
 end
 
 local function startRerollProcess()
-    -- This logic remains the same
+    local targetEnchants = Fluent.Options.EnchantDropdown.Value
+    local targetLevel = tonumber(Fluent.Options.EnchantLevel.Value)
+    local rerollQueue = {}
+    
+    local selectedPetIds = {}
+    for _, displayName in pairs(Fluent.Options.PetDropdown.Value) do
+        if petDataMap[displayName] then table.insert(selectedPetIds, petDataMap[displayName]) end
+    end
+    
+    if #selectedPetIds == 0 or #targetEnchants == 0 or not targetLevel then
+        StatusLabel:SetText("⚠️ Select pets, enchants, and a level.")
+        EnchantToggle:Set({ Value = false, Silent = true })
+        EnchantToggle:SetText("Start Enchanting")
+        return
+    end
+    
+    rerolling = true
+    StatusLabel:SetText("⏳ Initializing...")
+    
+    coroutine.wrap(function()
+        local allPets = LocalData:Get().Pets or {}
+        for _, petId in pairs(selectedPetIds) do
+            local pet
+            for _, p in pairs(allPets) do
+                if p.Id == petId then pet = p; break end
+            end
+            if pet and not hasDesiredEnchant(pet, targetEnchants, targetLevel) then
+                table.insert(rerollQueue, petId)
+            end
+        end
+
+        while rerolling do
+            if #rerollQueue > 0 then
+                local currentPetId = table.remove(rerollQueue, 1)
+                StatusLabel:SetText("🔁 Rerolling pet ID: " .. tostring(currentPetId):sub(1, 8))
+                RemoteFunction:InvokeServer("RerollEnchants", currentPetId, "Gems")
+                
+                local pet
+                for _, p in pairs(LocalData:Get().Pets or {}) do if p.Id == currentPetId then pet = p; break end end
+                if pet and not hasDesiredEnchant(pet, targetEnchants, targetLevel) then
+                    table.insert(rerollQueue, currentPetId)
+                end
+            else
+                StatusLabel:SetText("✅ Pets have desired enchants. Monitoring...")
+                task.wait(2.0)
+                
+                for _, petId in pairs(selectedPetIds) do
+                    local pet
+                    for _, p in pairs(LocalData:Get().Pets or {}) do if p.Id == petId then pet = p; break end end
+                    if pet and not hasDesiredEnchant(pet, targetEnchants, targetLevel) then
+                        StatusLabel:SetText("⚠️ Pet " .. pet.Name .. " lost enchant. Re-queuing...")
+                        table.insert(rerollQueue, pet.Id)
+                    end
+                end
+            end
+            task.wait(0.4)
+        end
+    end)()
 end
 
 local function stopRerollProcess()
     rerolling = false
     StatusLabel:SetText("⏹️ Reroll stopped by user.")
 end
-print("DEBUG: Part 4 - Complete.")
 
-
+--// =================================================================================
 --// Part 5: Final UI Connections
-print("DEBUG: Part 5 - Connecting final UI (the toggle)...")
+--// =================================================================================
+
 EnchantToggle = SettingsSection:AddToggle("EnchantToggle", {
-    Text = "Start Enchanting", Default = false,
+    Text = "Start Enchanting",
+    Default = false,
     Callback = function(toggledOn)
         if toggledOn then
             EnchantToggle:SetText("Stop Enchanting")
@@ -137,9 +194,6 @@ EnchantToggle = SettingsSection:AddToggle("EnchantToggle", {
         end
     end,
 })
-print("DEBUG: Part 5 - Complete. Script setup finished.")
 
--- Initial setup call
 task.wait(2)
-print("DEBUG: Performing initial pet list update...")
 updatePetList()
