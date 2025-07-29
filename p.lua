@@ -1,7 +1,7 @@
 --[[
     Original script functionality maintained.
     UI construction is now handled by the Fluent library.
-    - Replaced manual Frame/Button/etc. creation with Fluent's API.
+    - Replaced masdasdasdsadsdaasfgsafsafsaanual Frame/Button/etc. creation with Fluent's API.
     - Used Fluent's Dropdown for multi-select pet functionality.
     - Used Fluent's Textbox, Button, and Label elements.
     - Logic is connected via Fluent's callback and options system.
@@ -20,7 +20,7 @@ local Window = Fluent:CreateWindow({
     Title = "🔁 Enchant Reroller",
     SubTitle = "by you",
     TabWidth = 160,
-    Size = UDim2.fromOffset(440, 500),
+    Size = UDim2.fromOffset(440, 520), -- Increased height slightly
     Acrylic = true,
     Theme = "Dark",
     MinimizeKey = Enum.KeyCode.RightControl
@@ -30,10 +30,11 @@ local Window = Fluent:CreateWindow({
 local MainTab = Window:AddTab({ Title = "Reroller", Icon = "rbxassetid://10222013164" })
 
 --// UI Elements
-local StatusLabel = MainTab:AddLabel({ Text = "Status: Waiting..." })
-
--- Section for pet selection
+-- Create Sections first
 local PetSection = MainTab:AddSection("Pet Selection")
+local SettingsSection = MainTab:AddSection("Settings & Control")
+
+-- Add elements to their respective sections
 local PetDropdown = PetSection:AddDropdown("PetDropdown", {
     Title = "Select Pets",
     Values = {}, -- Will be populated later
@@ -41,8 +42,10 @@ local PetDropdown = PetSection:AddDropdown("PetDropdown", {
     Text = "Click to select pets...",
 })
 
--- Section for reroll configuration and controls
-local SettingsSection = MainTab:AddSection("Settings & Control")
+-- CORRECTED: Add the label to a Section, not the Tab
+local StatusLabel = SettingsSection:AddLabel({ Text = "Status: Waiting..." })
+StatusLabel:SetText("Status: Waiting...") -- Alternative way to set text
+
 SettingsSection:AddTextbox("EnchantName", {
     Title = "Enchant Name",
     PlaceholderText = "e.g., Agility",
@@ -138,16 +141,16 @@ local function processRerolls()
                 end
 
                 if currentPet and not hasDesiredEnchant(currentPet, targetEnchant, targetLevel) then
-                    StatusLabel:Set("🔁 Rerolling " .. (currentPet.Name or currentPetId))
+                    StatusLabel:SetText("🔁 Rerolling " .. (currentPet.Name or currentPetId))
                     RemoteFunction:InvokeServer("RerollEnchants", currentPetId, "Gems")
                     -- Add the pet back to the end of the queue to check it again after others
                     table.insert(rerollQueue, currentPetId)
                 else
-                    StatusLabel:Set("✅ " .. (currentPet and currentPet.Name or currentPetId) .. " has desired enchant.")
+                    StatusLabel:SetText("✅ " .. (currentPet and currentPet.Name or currentPetId) .. " has desired enchant.")
                 end
 
             else -- If queue is empty, monitor selected pets
-                StatusLabel:Set("✅ All pets have the desired enchant. Monitoring...")
+                StatusLabel:SetText("✅ All pets have the desired enchant. Monitoring...")
                 task.wait(2.0) -- Wait before checking again
 
                 local selectedDisplayNames = Fluent.Options.PetDropdown.Value
@@ -159,14 +162,14 @@ local function processRerolls()
                     end
 
                     if pet and not hasDesiredEnchant(pet, targetEnchant, targetLevel) then
-                        StatusLabel:Set("⚠️ " .. (pet.Name or pet.Id) .. " lost enchant. Re-queuing...")
+                        StatusLabel:SetText("⚠️ " .. (pet.Name or pet.Id) .. " lost enchant. Re-queuing...")
                         table.insert(rerollQueue, pet.Id)
                     end
                 end
             end
             task.wait(0.4) -- Delay between actions
         end
-        StatusLabel:Set("⏹️ Reroll stopped.")
+        StatusLabel:SetText("⏹️ Reroll stopped.")
     end)()
 end
 
@@ -179,17 +182,17 @@ SettingsSection:AddButton({
         local selectedPets = Fluent.Options.PetDropdown.Value
 
         if #selectedPets == 0 then
-            StatusLabel:Set("⚠️ Select at least one pet.")
+            StatusLabel:SetText("⚠️ Select at least one pet.")
             return
         end
         if targetEnchant == "" or not targetLevel then
-            StatusLabel:Set("⚠️ Enter a valid enchant name and level.")
+            StatusLabel:SetText("⚠️ Enter a valid enchant name and level.")
             return
         end
 
         rerolling = true
         rerollQueue = {} -- Clear queue before starting
-        StatusLabel:Set("⏳ Starting reroll...")
+        StatusLabel:SetText("⏳ Starting reroll...")
         processRerolls()
     end
 })
@@ -200,6 +203,6 @@ SettingsSection:AddButton({
     Callback = function()
         rerolling = false
         rerollQueue = {} -- Clear the queue
-        StatusLabel:Set("⏹️ Reroll stopped by user.")
+        StatusLabel:SetText("⏹️ Reroll stopped by user.")
     end
 })
