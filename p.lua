@@ -1,282 +1,167 @@
--- Main GUI Script (put in LocalScript)
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local LocalPlayer = Players.LocalPlayer
 local LocalData = require(ReplicatedStorage.Client.Framework.Services.LocalData)
 local RemoteFunction = ReplicatedStorage.Shared.Framework.Network.Remote.RemoteFunction
+local LocalPlayer = Players.LocalPlayer
 
--- GUI Setup
-local screenGui = Instance.new("ScreenGui", LocalPlayer:WaitForChild("PlayerGui"))
-screenGui.Name = "EnchantRerollerGUI"
-screenGui.ResetOnSpawn = false
+-- Load Fluent
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 
-local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 440, 0, 600)
-mainFrame.Position = UDim2.new(0.5, -220, 0.5, -300)
-mainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-mainFrame.BorderSizePixel = 0
-mainFrame.Parent = screenGui
+local window = Fluent:CreateWindow({
+    Title = "Enchant Reroller",
+    SubTitle = "by FluentUI",
+    Size = UDim2.fromOffset(450, 600),
+    Theme = "Dark",
+    Acrylic = true
+})
 
-local uiCorner = Instance.new("UICorner", mainFrame)
-uiCorner.CornerRadius = UDim.new(0, 8)
+local tab = window:AddTab({Title = "Main", Icon = "settings"})
+local opts = Fluent.Options
 
--- Drag to move
-mainFrame.Active = true
-mainFrame.Draggable = true
-
--- Title
-local title = Instance.new("TextLabel", mainFrame)
-title.Size = UDim2.new(1, 0, 0, 30)
-title.BackgroundTransparency = 1
-title.Text = "🔁 Enchant Reroller"
-title.TextColor3 = Color3.new(1, 1, 1)
-title.Font = Enum.Font.GothamBold
-title.TextSize = 18
-
--- Search Box
-local searchBox = Instance.new("TextBox", mainFrame)
-searchBox.PlaceholderText = "Search Pet Name..."
-searchBox.Size = UDim2.new(1, -20, 0, 28)
-searchBox.Position = UDim2.new(0, 10, 0, 40)
-searchBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-searchBox.TextColor3 = Color3.new(1, 1, 1)
-searchBox.Font = Enum.Font.Gotham
-
--- Dropdown toggle button
-local dropdownButton = Instance.new("TextButton", mainFrame)
-dropdownButton.Size = UDim2.new(1, -20, 0, 30)
-dropdownButton.Position = UDim2.new(0, 10, 0, 75)
-dropdownButton.Text = "▼ Select Pets"
-dropdownButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-dropdownButton.TextColor3 = Color3.new(1, 1, 1)
-dropdownButton.Font = Enum.Font.Gotham
-
--- Scrollable dropdown
-local dropdownFrame = Instance.new("ScrollingFrame", mainFrame)
-dropdownFrame.Position = UDim2.new(0, 10, 0, 110)
-dropdownFrame.Size = UDim2.new(1, -20, 0, 180)
-dropdownFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-dropdownFrame.ScrollBarThickness = 6
-dropdownFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-dropdownFrame.Visible = false
-dropdownFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
-
-dropdownButton.MouseButton2Click:Connect(function()
-    dropdownFrame.Visible = false
+-- Search + selection list
+local filterBox = tab:AddTextbox("filter", {Title = "Search Pet Name", Placeholder = "Type to filter..."}):OnChanged(function(txt)
+    updateList(txt)
 end)
 
-local uiListLayout = Instance.new("UIListLayout", dropdownFrame)
-uiListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-uiListLayout.Padding = UDim.new(0, 4)
+local dropdown = tab:AddScrollingFrame("petList", {Title = "Pets", Size = UDim2.new(1, 0, 0, 200)})
+dropdown.AutomaticCanvasSize = Enum.AutomaticSize.Y
 
-local selectedPetIds = {}
+local selected = {}
 local petButtons = {}
 
--- Dropdown toggle
-dropdownButton.MouseButton1Click:Connect(function()
-    dropdownFrame.Visible = not dropdownFrame.Visible
-end)
+function updateList(filter)
+    dropdown:Clear()  -- assuming such method exists
+    for _, btn in ipairs(petButtons) do btn:Destroy() end
+    petButtons = {}
 
--- Populate dropdown
-local function updatePetList(filterText)
-    for _, btn in pairs(petButtons) do btn:Destroy() end
-    table.clear(petButtons)
-
-    local data = LocalData:Get()
-    for _, pet in pairs(data.Pets or {}) do
-        local petName = pet.Name or pet.name or pet._name or "Unknown"
-        local petId = pet.Id
-        if filterText == "" or string.find(string.lower(petName), string.lower(filterText)) then
-            local item = Instance.new("TextButton")
-            item.Size = UDim2.new(1, -10, 0, 24)
-            item.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-            item.TextColor3 = Color3.new(1, 1, 1)
-            item.Font = Enum.Font.Gotham
-            item.TextSize = 14
-            item.Text = petName .. " [" .. petId .. "]"
-            item.Parent = dropdownFrame
-            petButtons[#petButtons + 1] = item
-
-            item.MouseButton1Click:Connect(function()
-                if selectedPetIds[petId] then
-                    selectedPetIds[petId] = nil
-                    item.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+    local pets = LocalData:Get().Pets or {}
+    for _, pet in ipairs(pets) do
+        local name = pet.Name or pet.name or "Unknown"
+        if filter == "" or name:lower():find(filter:lower()) then
+            local btn = dropdown:AddButton(pet.Id, {Title = name .. " ["..pet.Id.."]"})
+            petButtons[#petButtons+1] = btn
+            btn:OnClick(function()
+                if selected[pet.Id] then
+                    selected[pet.Id] = nil
+                    btn:SetState(false)
                 else
-                    selectedPetIds[petId] = true
-                    item.BackgroundColor3 = Color3.fromRGB(120, 120, 120)
+                    selected[pet.Id] = true
+                    btn:SetState(true)
                 end
             end)
         end
     end
 end
 
-searchBox:GetPropertyChangedSignal("Text"):Connect(function()
-    updatePetList(searchBox.Text)
-end)
+-- Enchant inputs
+local enchantBox = tab:AddTextbox("enchant", {Title = "Enchant Name", Placeholder = "Enter enchant ID"})
+local levelBox = tab:AddTextbox("level", {Title = "Enchant Level", Placeholder = "Enter level"})
+local statusLabel = tab:AddLabel("status", {Title = "Status", Content = "Waiting..."})
 
-updatePetList("")
+-- Action buttons
+tab:AddButton("start", {
+    Title = "Start",
+    Description = "Begin reroll loop",
+    Callback = function()
+        startReroll()
+    end
+})
 
--- Enchant Name
-local enchantBox = Instance.new("TextBox", mainFrame)
-enchantBox.PlaceholderText = "Enter Enchant Name"
-enchantBox.Size = UDim2.new(1, -20, 0, 30)
-enchantBox.Position = UDim2.new(0, 10, 0, 310)
-enchantBox.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-enchantBox.TextColor3 = Color3.new(1, 1, 1)
-enchantBox.Font = Enum.Font.Gotham
+tab:AddButton("stop", {
+    Title = "Stop",
+    Description = "Stop rerolling",
+    Callback = function()
+        rerolling = false
+        statusLabel:SetContent("⏹️ Reroll stopped.")
+    end
+})
 
--- Enchant Level
-local levelBox = Instance.new("TextBox", mainFrame)
-levelBox.PlaceholderText = "Enter Enchant Level"
-levelBox.Size = UDim2.new(1, -20, 0, 30)
-levelBox.Position = UDim2.new(0, 10, 0, 350)
-levelBox.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-levelBox.TextColor3 = Color3.new(1, 1, 1)
-levelBox.Font = Enum.Font.Gotham
-levelBox.Text = ""
-
--- Status Label
-local statusLabel = Instance.new("TextLabel", mainFrame)
-statusLabel.Size = UDim2.new(1, -20, 0, 40)
-statusLabel.Position = UDim2.new(0, 10, 0, 390)
-statusLabel.BackgroundTransparency = 1
-statusLabel.TextColor3 = Color3.new(1, 1, 1)
-statusLabel.Text = "Status: Waiting..."
-statusLabel.Font = Enum.Font.Gotham
-statusLabel.TextWrapped = true
-
--- Start Button
-local startButton = Instance.new("TextButton", mainFrame)
-startButton.Text = "▶ Start"
-startButton.Size = UDim2.new(0.48, -5, 0, 30)
-startButton.Position = UDim2.new(0.02, 0, 0, 440)
-startButton.BackgroundColor3 = Color3.fromRGB(40, 130, 70)
-startButton.TextColor3 = Color3.new(1, 1, 1)
-startButton.Font = Enum.Font.GothamBold
-
--- Stop Button
-local stopButton = Instance.new("TextButton", mainFrame)
-stopButton.Text = "■ Stop"
-stopButton.Size = UDim2.new(0.48, -5, 0, 30)
-stopButton.Position = UDim2.new(0.5, 5, 0, 440)
-stopButton.BackgroundColor3 = Color3.fromRGB(130, 40, 40)
-stopButton.TextColor3 = Color3.new(1, 1, 1)
-stopButton.Font = Enum.Font.GothamBold
-
-startButton.Parent = mainFrame
-stopButton.Parent = mainFrame
-
+-- Core reroll logic (same as before)
 local rerolling = false
 local rerollQueue = {}
 
 local function hasDesiredEnchant(pet, id, lvl)
-    for _, enchant in pairs(pet.Enchants or {}) do
-        if enchant.Id == id and enchant.Level == tonumber(lvl) then
-            return true
-        end
+    for _, e in ipairs(pet.Enchants or {}) do
+        if e.Id == id and e.Level == tonumber(lvl) then return true end
     end
     return false
 end
 
-local function enqueueRerolls(targetEnchant, targetLevel)
-    local playerData = LocalData:Get()
-    for _, pet in pairs(playerData.Pets or {}) do
-        if selectedPetIds[pet.Id] and not hasDesiredEnchant(pet, targetEnchant, targetLevel) then
+local function enqueueRerolls(enchant, lvl)
+    rerollQueue = {}
+    for _, pet in pairs(LocalData:Get().Pets or {}) do
+        if selected[pet.Id] and not hasDesiredEnchant(pet, enchant, lvl) then
             table.insert(rerollQueue, pet.Id)
         end
     end
 end
 
-startButton.MouseButton1Click:Connect(function()
-    local targetEnchant = enchantBox.Text:lower()
-    local targetLevel = tonumber(levelBox.Text)
-    if not next(selectedPetIds) then
-        statusLabel.Text = "⚠️ Select at least one pet."
+function startReroll()
+    if next(selected) == nil then
+        statusLabel:SetContent("⚠️ Select at least one pet.")
         return
     end
-    if not targetEnchant or not targetLevel then
-        statusLabel.Text = "⚠️ Enter valid enchant and level."
+    local enchantId = enchantBox:GetValue():lower()
+    local lvl = tonumber(levelBox:GetValue())
+    if enchantId == "" or not lvl then
+        statusLabel:SetContent("⚠️ Enter valid enchant and level.")
         return
     end
-
     rerolling = true
-    rerollQueue = {}
-    statusLabel.Text = "⏳ Starting reroll..."
-    enqueueRerolls(targetEnchant, targetLevel)
+    statusLabel:SetContent("⏳ Starting reroll...")
+    enqueueRerolls(enchantId, lvl)
 
     coroutine.wrap(function()
         while rerolling and #rerollQueue > 0 do
-            local currentPetId = table.remove(rerollQueue, 1)
-
+            local petId = table.remove(rerollQueue, 1)
             while rerolling do
-                local playerData = LocalData:Get()
-                local currentPet
-                for _, p in pairs(playerData.Pets or {}) do
-                    if p.Id == currentPetId then
-                        currentPet = p
-                        break
-                    end
+                local pet
+                for _, p in ipairs(LocalData:Get().Pets or {}) do
+                    if p.Id == petId then pet = p; break end
                 end
-
-                if currentPet and not hasDesiredEnchant(currentPet, targetEnchant, targetLevel) then
-                    RemoteFunction:InvokeServer("RerollEnchants", currentPetId, "Gems")
-                    statusLabel.Text = "🔁 Rerolling " .. (currentPet.Name or currentPetId)
+                if pet and not hasDesiredEnchant(pet, enchantId, lvl) then
+                    RemoteFunction:InvokeServer("RerollEnchants", petId, "Gems")
+                    statusLabel:SetContent("🔁 Rerolling "..(pet.Name or petId))
                 else
-                    statusLabel.Text = "✅ " .. (currentPet and currentPet.Name or currentPetId) .. " has desired enchant."
+                    statusLabel:SetContent("✅ "..(pet and pet.Name or petId).." has desired enchant.")
                     break
                 end
                 task.wait(0.3)
             end
-            enqueueRerolls(targetEnchant, targetLevel)
+            enqueueRerolls(enchantId, lvl)
             task.wait(0.5)
         end
 
-        statusLabel.Text = "✅ All selected pets have desired enchant. Monitoring for changes..."
-
+        statusLabel:SetContent("✅ All selected pets have desired enchant. Monitoring...")
         while rerolling do
-            local playerData = LocalData:Get()
-            local anyChanged = false
-
-            for _, pet in pairs(playerData.Pets or {}) do
-                if selectedPetIds[pet.Id] and not hasDesiredEnchant(pet, targetEnchant, targetLevel) then
+            for _, pet in ipairs(LocalData:Get().Pets or {}) do
+                if selected[pet.Id] and not hasDesiredEnchant(pet, enchantId, lvl) then
                     table.insert(rerollQueue, pet.Id)
-                    anyChanged = true
-                    statusLabel.Text = "⚠️ " .. (pet.Name or pet.Id) .. " lost desired enchant. Re-queuing..."
+                    statusLabel:SetContent("⚠️ "..(pet.Name or pet.Id).." lost desired enchant. Re-queuing...")
                 end
             end
-
             while rerolling and #rerollQueue > 0 do
-                local currentPetId = table.remove(rerollQueue, 1)
-
-                while rerolling do
-                    local currentPet
-                    for _, p in pairs(LocalData:Get().Pets or {}) do
-                        if p.Id == currentPetId then
-                            currentPet = p
-                            break
-                        end
+                local petId = table.remove(rerollQueue,1)
+                repeat
+                    local curr = nil
+                    for _, p in ipairs(LocalData:Get().Pets or {}) do
+                        if p.Id == petId then curr = p; break end
                     end
-
-                    if currentPet and not hasDesiredEnchant(currentPet, targetEnchant, targetLevel) then
-                        RemoteFunction:InvokeServer("RerollEnchants", currentPetId, "Gems")
-                        statusLabel.Text = "🔁 Rerolling " .. (currentPet.Name or currentPetId)
+                    if curr and not hasDesiredEnchant(curr, enchantId, lvl) then
+                        RemoteFunction:InvokeServer("RerollEnchants", petId, "Gems")
+                        statusLabel:SetContent("🔁 Rerolling "..(curr.Name or petId))
+                        task.wait(0.3)
                     else
-                        statusLabel.Text = "✅ " .. (currentPet and currentPet.Name or currentPetId) .. " has desired enchant."
+                        statusLabel:SetContent("✅ "..(curr and curr.Name or petId).." is good.")
                         break
                     end
-
-                    task.wait(0.3)
-                end
+                until not rerolling
             end
-
-            task.wait(2.0)
+            task.wait(2)
         end
 
-        statusLabel.Text = "⏹️ Reroll stopped."
+        statusLabel:SetContent("⏹️ Reroll stopped.")
     end)()
-end)
+end
 
-stopButton.MouseButton1Click:Connect(function()
-    rerolling = false
-    statusLabel.Text = "⏹️ Reroll stopped."
-end)
+updateList("")  -- initial populate
