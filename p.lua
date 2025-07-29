@@ -1,191 +1,182 @@
---// Services & Fluent Setup //--
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local LocalPlayer = Players.LocalPlayer
-
--- Load Fluent library and its SaveManager addon
+--// Fluent + SaveManager Setup
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
-SaveManager:SetLibrary(Fluent)
+local Options = SaveManager:Load() or {}
 
---// Main Variables & Dependencies //--
-local LocalData = require(ReplicatedStorage.Client.Framework.Services.LocalData)
-local RemoteFunction = ReplicatedStorage.Shared.Framework.Network.Remote.RemoteFunction
-local rerolling = false
-local rerollThread = nil
-
---// Create the Fluent Window //--
+--// Window Configuration
 local Window = Fluent:CreateWindow({
-    Title = "Enchant Reroller 🔁",
-    SubTitle = "by your_name_here",
+    Title = "Enchant Reroller 2.0",
+    SubTitle = "by YourName",
     TabWidth = 160,
-    Size = UDim2.fromOffset(480, 420), -- Adjusted size for the new layout
+    Size = UDim2.fromOffset(460, 420),
     Acrylic = true,
     Theme = "Dark",
+    Accent = Color3.fromRGB(100, 160, 255),
     MinimizeKey = Enum.KeyCode.LeftControl
 })
 
--- Add a tab for the main functionality
-local RerollerTab = Window:AddTab({ Title = "Reroller", Icon = "refresh" })
+SaveManager:SetLibrary(Fluent)
+SaveManager:IgnoreThemeSettings() -- Optional: Prevents theme changes from being saved
 
---// Helper Functions //--
+--// Tabs
+local MainTab = Window:AddTab({ Title = "Reroller", Icon = "rbxassetid://6031219434" })
+local CreditsTab = Window:AddTab({ Title = "Info", Icon = "rbxassetid://7995689793" })
 
--- Fetches and formats pet data for the dropdown
-local function getPetOptions()
-    local petData = LocalData:Get()
-    local petOptions = {}
-    if not petData or not petData.Pets then return petOptions end
+--// Services & Variables
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
 
-    for _, pet in pairs(petData.Pets) do
-        -- Create a display name and store the ID in a way we can retrieve it
-        local petName = pet.Name or pet.name or pet._name or "Unknown"
-        local petId = pet.Id
-        -- Format: "Pet Name [ID]" to ensure uniqueness and provide info
-        petOptions[petName .. " [" .. tostring(petId) .. "]"] = true
-    end
-    return petOptions
-end
+local LocalPlayer = Players.LocalPlayer
+local LocalData = require(ReplicatedStorage.Client.Framework.Services.LocalData)
+local RemoteFunction = ReplicatedStorage.Shared.Framework.Network.Remote.RemoteFunction
 
--- Extracts the Pet ID from the dropdown's formatted string
-local function getPetIdFromString(petString)
-    -- Matches the content within the square brackets at the end of the string
-    return string.match(petString, "%[(.+)%]$")
-end
+local rerollingEnabled = false
+local selectedPetIds = {}
 
--- Checks if a pet has the desired enchant
-local function hasDesiredEnchant(pet, enchantId, enchantLevel)
-    if not pet or not pet.Enchants then return false end
+--// Core Logic
+local function hasDesiredEnchant(pet, enchantName, enchantLevel)
+    if not pet or not pet.Enchants or not enchantName or enchantName == "" or not enchantLevel then return false end
     for _, enchant in pairs(pet.Enchants) do
-        if string.lower(tostring(enchant.Id)) == string.lower(tostring(enchantId)) and enchant.Level == tonumber(enchantLevel) then
+        if enchant.Id:lower() == enchantName:lower() and enchant.Level == enchantLevel then
             return true
         end
     end
     return false
 end
 
---// UI Elements //--
+local function rerollerLoop()
+    while rerollingEnabled do
+        local targetEnchant = Options.TargetEnchantName
+        local targetLevel = tonumber(Options.TargetEnchantLevel)
+        local rerollQueue = {}
+        local playerData = LocalData:Get()
+        
+        -- Guard clause: Stop if settings are invalid
+        if not targetEnchant or targetEnchant == "" or not targetLevel then
+            Fluent:Notify({ Title = "Error", Content = "Invalid enchant name or level in settings." })
+            getgenv().ToggleReroller:Set(false) -- Access the toggle via getgenv to turn it off
+            break
+        end
 
--- A paragraph for status updates
-local StatusLabel = RerollerTab:AddParagraph({
-    Title = "Status",
-    Content = "Waiting for instructions..."
-})
+        -- Find pets that need rerolling from the selected list
+        for _, petId in pairs(selectedPetIds) do
+            local currentPet
+            for _, p in pairs(playerData.Pets or {}) do
+                if p.Id == petId then
+                    currentPet = p
+                    break
+                end
+            end
 
--- Multi-selection dropdown for pets
-local PetDropdown = RerollerTab:AddMultiDropdown("PetSelector", {
+            if currentPet and not hasDesiredEnchant(currentPet, targetEnchant, targetLevel) then
+                table.insert(rerollQueue, currentPet)
+            end
+        end
+
+        if #rerollQueue > 0 then
+            for _, petToReroll in ipairs(rerollQueue) do
+                if not rerollingEnabled then break end -- Check flag before each expensive operation
+                getgenv().StatusLabel:Set(`🔁 Rerolling {petToReroll.Name or petToReroll.Id}...`)
+                RemoteFunction:InvokeServer("RerollEnchants", petToReroll.Id, "Gems")
+                task.wait(0.3)
+            end
+        else
+            getgenv().StatusLabel:Set("✅ All selected pets have the desired enchant. Monitoring...")
+        end
+        
+        task.wait(1.5) -- Wait before checking all pets again
+    end
+end
+
+--// UI Elements
+
+-- Main Rerolling Tab
+local ConfigSection = MainTab:AddSection("Configuration")
+
+getgenv().PetDropdown = ConfigSection:AddDropdown("PetDropdown", {
     Title = "Select Pets",
-    Values = getPetOptions(),
+    Values = (function()
+        local petOptions = {}
+        local data = LocalData:Get()
+        if data and data.Pets then
+            for _, pet in pairs(data.Pets) do
+                table.insert(petOptions, `{pet.Name or "Unknown"} [{pet.Id}]`)
+            end
+        end
+        table.sort(petOptions)
+        return petOptions
+    end)(),
+    MultiSelect = true,
     Default = {},
 })
 
--- Input field for the enchant name
-local EnchantNameInput = RerollerTab:AddInput("EnchantName", {
-    Title = "Enchant Name",
-    Placeholder = "e.g., Agility",
-    Default = ""
-})
+getgenv().PetDropdown.OnChanged:Connect(function(selectedOptions)
+    table.clear(selectedPetIds)
+    for _, optionString in pairs(selectedOptions) do
+        local id = string.match(optionString, "%[(.+)%]$")
+        if id then table.insert(selectedPetIds, id) end
+    end
+    getgenv().StatusLabel:Set(`ℹ️ Selected {tostring(#selectedPetIds)} pets.`)
+end)
 
--- Input field for the enchant level
-local EnchantLevelInput = RerollerTab:AddInput("EnchantLevel", {
-    Title = "Enchant Level",
-    Placeholder = "e.g., 9",
-    Default = "",
-    Numeric = true -- Restrict input to numbers
-})
-
-RerollerTab:AddButton({
-    Title = "Refresh Pet List",
-    Description = "Click if your pets have changed.",
-    Callback = function()
-        PetDropdown:SetValues(getPetOptions())
-        Fluent:Notify({ Title = "Pets Refreshed", Content = "The pet list has been updated." })
+ConfigSection:AddTextbox("TargetEnchantName", {
+    Title = "Target Enchant Name",
+    Placeholder = "e.g., agility",
+    Default = Options.TargetEnchantName or "",
+    Callback = function(text)
+        Options.TargetEnchantName = text
+        SaveManager:Save(Options)
     end
 })
 
--- The main toggle to start and stop the rerolling process
-RerollerTab:AddToggle("RerollToggle", {
-    Title = "Start / Stop Rerolling",
+ConfigSection:AddTextbox("TargetEnchantLevel", {
+    Title = "Target Enchant Level",
+    Placeholder = "e.g., 10",
+    Default = Options.TargetEnchantLevel or "",
+    Callback = function(text)
+        local sanitized = text:gsub("%D", "") -- Allow only numbers
+        Options.TargetEnchantLevel = sanitized
+        SaveManager:Save(Options)
+        return sanitized -- Update the textbox visually
+    end
+})
+
+local ControlsSection = MainTab:AddSection("Controls & Status")
+
+getgenv().ToggleReroller = ControlsSection:AddToggle("EnableRerolling", {
+    Title = "Enable Rerolling",
     Default = false,
     Callback = function(value)
-        rerolling = value
-
-        if not rerolling then
-            -- Stop the process
-            if rerollThread then
-                task.cancel(rerollThread)
-                rerollThread = nil
+        rerollingEnabled = value
+        if value then
+            if #selectedPetIds == 0 then
+                Fluent:Notify({ Title = "Warning", Content = "No pets selected to reroll."})
+                getgenv().ToggleReroller:Set(false) -- Automatically turn toggle off
+                return
             end
-            StatusLabel:Set("⏹️ Reroll stopped by user.")
-            return
+            getgenv().StatusLabel:Set("⏳ Starting reroll process...")
+            task.spawn(rerollerLoop)
+        else
+            getgenv().StatusLabel:Set("⏹️ Reroll process stopped.")
         end
-
-        -- Start the process
-        local selectedPetsRaw = PetDropdown.Value
-        local targetEnchant = EnchantNameInput.Value
-        local targetLevel = tonumber(EnchantLevelInput.Value)
-
-        -- --- Validation ---
-        if not next(selectedPetsRaw) then
-            StatusLabel:Set("⚠️ Error: Select at least one pet.")
-            rerolling = false
-            return
-        end
-        if targetEnchant == "" or not targetLevel then
-            StatusLabel:Set("⚠️ Error: Enter a valid enchant name and level.")
-            rerolling = false
-            return
-        end
-        -- --- End Validation ---
-
-        -- Create and start the main reroll coroutine
-        rerollThread = task.spawn(function()
-            local rerollQueue = {}
-
-            -- Main loop, continues as long as the toggle is on
-            while rerolling do
-                local playerData = LocalData:Get()
-                rerollQueue = {} -- Clear and rebuild the queue each cycle
-
-                -- Check all selected pets and queue the ones needing a reroll
-                for petString, _ in pairs(selectedPetsRaw) do
-                    local petId = getPetIdFromString(petString)
-                    local currentPet
-                    for _, p in pairs(playerData.Pets or {}) do
-                        if p.Id == petId then
-                            currentPet = p
-                            break
-                        end
-                    end
-
-                    if currentPet and not hasDesiredEnchant(currentPet, targetEnchant, targetLevel) then
-                        table.insert(rerollQueue, {id = petId, name = currentPet.Name or petId})
-                    end
-                end
-
-                -- Process the queue
-                if #rerollQueue > 0 then
-                    for _, petToReroll in ipairs(rerollQueue) do
-                        if not rerolling then break end -- Check if stopped mid-queue
-                        
-                        StatusLabel:Set("🔁 Rerolling: " .. petToReroll.name)
-                        RemoteFunction:InvokeServer("RerollEnchants", petToReroll.id, "Gems")
-                        task.wait(0.3) -- Wait between rerolls
-                    end
-                else
-                    StatusLabel:Set("✅ All selected pets have the desired enchant. Monitoring...")
-                end
-
-                task.wait(1.5) -- Wait before checking all pets again
-            end
-            StatusLabel:Set("⏹️ Reroll process finished.")
-        end)
     end
 })
 
---// Finalize UI //--
+getgenv().StatusLabel = ControlsSection:AddLabel("StatusLabel", {
+    Title = "Status: Waiting for input..."
+})
+
+-- Info Tab
+CreditsTab:AddParagraph({ Title = "About this Script", Content = "This script automatically rerolls enchants on selected pets until a target enchant and level is reached."})
+CreditsTab:AddParagraph({ Title = "Creator", Content = "UI refactor based on your example."})
+CreditsTab:AddButton({ Title = "Copy Discord to Clipboard", Content = "lonly on discord", Callback = function() setclipboard("lonly on discord") end})
+
+
+--// Finalize
 Window:SelectTab(1)
+SaveManager:LoadAtStart(Options)
 Fluent:Notify({
     Title = "Script Loaded",
-    Content = "Enchant Reroller is ready.",
-    Duration = 8
+    Content = "Enchant Reroller 2.0 is ready.",
+    Duration = 5
 })
