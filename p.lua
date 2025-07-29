@@ -1,5 +1,5 @@
 --[[
-    Script: Enchant Reroller
+    Script: Enchant Rerollerr
     Author: Gemini
     Description: Automatically rerolls pet enchants until a desired enchant is obtained.
     Uses the Fluent UI library by dawid-scripts.
@@ -18,7 +18,7 @@ local LocalData = require(ReplicatedStorage.Client.Framework.Services.LocalData)
 local RemoteFunction = ReplicatedStorage.Shared.Framework.Network.Remote.RemoteFunction
 
 --============================================================================--
---                          CONFIGURATION                                     --
+--                               CONFIGURATION                              --
 --============================================================================--
 
 -- A list of all available enchants in the game
@@ -32,7 +32,7 @@ local ALL_ENCHANTS = {
 }
 
 --============================================================================--
---                          SCRIPT STATE & VARIABLES                          --
+--                           SCRIPT STATE & VARIABLES                           --
 --============================================================================--
 
 local rerolling = false
@@ -41,13 +41,14 @@ local selectedEnchants = {} -- Stores { [enchantName] = true/false }
 local petToggles = {}       -- Stores { [petId] = toggleObject }
 
 --============================================================================--
---                          UI SETUP (FLUENT)                                 --
+--                             UI SETUP (FLUENT)                              --
 --============================================================================--
 
 -- Create the main window
 local window = Fluent:CreateWindow({
     Title = "🔁 Enchant Reroller",
     SubTitle = "by Gemini",
+    TabWidth = 160, -- FIXED: Added missing parameter
     Size = UDim2.fromOffset(480, 500),
     Theme = "Dark",
     Accent = Color3.fromRGB(100, 255, 150)
@@ -63,7 +64,7 @@ local statusLabel = mainTab:AddLabel({
 })
 
 --============================================================================--
---                          CORE LOGIC                                        --
+--                                 CORE LOGIC                                 --
 --============================================================================--
 
 -- Helper function to find a pet object by its ID from player data
@@ -127,7 +128,7 @@ local function startRerollLoop()
 end
 
 --============================================================================--
---                       UI SECTIONS & INTERACTIONS                           --
+--                         UI SECTIONS & INTERACTIONS                         --
 --============================================================================--
 
 --- Controls Section ---
